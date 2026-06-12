@@ -1,191 +1,227 @@
 using UnityEngine;
 using Photon.Pun;
 
-/// <summary>
-/// Weapon System - Handles weapon firing, reloading, and switching
-/// Free Fire Style Weapons
-/// </summary>
-public class WeaponSystem : MonoBehaviourPunCallbacks
+public class WeaponSystem : MonoBehaviourPun
 {
-    [Header("Weapon Settings")]
-    public Gun[] weapons;
-    private int currentWeaponIndex = 0;
-    private Gun currentWeapon;
-
-    [Header("Firing")]
-    public float fireRate = 0.1f;
-    private float lastFireTime = 0f;
-    public Transform firePoint;
-
-    private void Start()
+    [System.Serializable]
+    public class Weapon
     {
-        if (weapons.Length > 0)
-        {
-            currentWeapon = weapons[0];
-            currentWeapon.gameObject.SetActive(true);
-        }
+        public string name;
+        public float damage;
+        public float fireRate;
+        public int ammo;
+        public int maxAmmo;
+        public float range;
+        public string type; // AR, Sniper, Shotgun, Pistol, SMG, Grenade
     }
 
-    private void Update()
+    public Weapon[] weapons = new Weapon[6];
+    private int currentWeaponIndex = -1;
+    private float lastFireTime = 0f;
+    private bool canShoot = true;
+
+    void Start()
+    {
+        InitializeWeapons();
+    }
+
+    void InitializeWeapons()
+    {
+        // Weapon 0: AR - M4
+        weapons[0] = new Weapon 
+        { 
+            name = "M4", 
+            damage = 25, 
+            fireRate = 0.1f, 
+            ammo = 0, 
+            maxAmmo = 300, 
+            range = 500f,
+            type = "AR"
+        };
+
+        // Weapon 1: Sniper - AWM
+        weapons[1] = new Weapon 
+        { 
+            name = "AWM", 
+            damage = 86, 
+            fireRate = 1.5f, 
+            ammo = 0, 
+            maxAmmo = 50, 
+            range = 1000f,
+            type = "Sniper"
+        };
+
+        // Weapon 2: Shotgun
+        weapons[2] = new Weapon 
+        { 
+            name = "Combat Shotgun", 
+            damage = 65, 
+            fireRate = 0.8f, 
+            ammo = 0, 
+            maxAmmo = 32, 
+            range = 30f,
+            type = "Shotgun"
+        };
+
+        // Weapon 3: Pistol - Glock
+        weapons[3] = new Weapon 
+        { 
+            name = "Glock", 
+            damage = 15, 
+            fireRate = 0.15f, 
+            ammo = 30, 
+            maxAmmo = 120, 
+            range = 200f,
+            type = "Pistol"
+        };
+
+        // Weapon 4: SMG - MP5
+        weapons[4] = new Weapon 
+        { 
+            name = "MP5", 
+            damage = 18, 
+            fireRate = 0.05f, 
+            ammo = 0, 
+            maxAmmo = 225, 
+            range = 100f,
+            type = "SMG"
+        };
+
+        // Weapon 5: Grenade
+        weapons[5] = new Weapon 
+        { 
+            name = "Grenade", 
+            damage = 50, 
+            fireRate = 2f, 
+            ammo = 0, 
+            maxAmmo = 15, 
+            range = 300f,
+            type = "Grenade"
+        };
+    }
+
+    void Update()
     {
         if (!photonView.IsMine) return;
 
-        if (Input.GetKeyDown(KeyCode.E))
+        // Weapon Switch
+        if (Input.GetKeyDown(KeyCode.E)) SelectWeapon(0);
+        if (Input.GetKeyDown(KeyCode.R)) SelectWeapon(1);
+        if (Input.GetKeyDown(KeyCode.T)) SelectWeapon(2);
+        if (Input.GetKeyDown(KeyCode.F)) SelectWeapon(3);
+        if (Input.GetKeyDown(KeyCode.G)) SelectWeapon(4);
+        if (Input.GetKeyDown(KeyCode.H)) SelectWeapon(5);
+
+        // Shoot
+        if (Input.GetMouseButton(0))
         {
-            SwitchWeapon();
+            Shoot();
+        }
+
+        // Reload
+        if (Input.GetKeyDown(KeyCode.Space))
+        {
+            Reload();
         }
     }
 
-    public void Fire()
+    void Shoot()
     {
-        if (currentWeapon == null) return;
-        if (Time.time - lastFireTime < fireRate) return;
-        if (currentWeapon.GetAmmo() <= 0) return;
+        if (currentWeaponIndex == -1)
+        {
+            Debug.Log("No weapon selected!");
+            return;
+        }
+
+        if (!canShoot || Time.time - lastFireTime < weapons[currentWeaponIndex].fireRate)
+            return;
+
+        if (weapons[currentWeaponIndex].ammo <= 0)
+        {
+            Debug.Log("No ammo!");
+            return;
+        }
 
         lastFireTime = Time.time;
-        currentWeapon.Fire(firePoint);
-        photonView.RPC("RPC_Fire", RpcTarget.Others);
-    }
+        weapons[currentWeaponIndex].ammo--;
 
-    [PunRPC]
-    void RPC_Fire()
-    {
-        if (currentWeapon != null)
-            currentWeapon.PlayFireAnimation();
-    }
-
-    public void Reload()
-    {
-        if (currentWeapon == null) return;
-        photonView.RPC("RPC_Reload", RpcTarget.All);
-    }
-
-    [PunRPC]
-    void RPC_Reload()
-    {
-        if (currentWeapon != null)
-            currentWeapon.Reload();
-    }
-
-    public void SwitchWeapon()
-    {
-        if (weapons.Length <= 1) return;
-
-        currentWeapon.gameObject.SetActive(false);
-        currentWeaponIndex = (currentWeaponIndex + 1) % weapons.Length;
-        currentWeapon = weapons[currentWeaponIndex];
-        currentWeapon.gameObject.SetActive(true);
-
-        Debug.Log($"[WeaponSystem] Switched to {currentWeapon.GetWeaponName()}");
-    }
-
-    public Gun GetCurrentWeapon()
-    {
-        return currentWeapon;
-    }
-
-    public void AddAmmo(int amount)
-    {
-        if (currentWeapon != null)
-            currentWeapon.AddAmmo(amount);
-    }
-}
-
-[System.Serializable]
-public class Gun : MonoBehaviour
-{
-    [Header("Gun Settings")]
-    public string weaponName = "Assault Rifle";
-    public float damage = 25f;
-    public float fireRate = 0.1f;
-    public float reloadTime = 2f;
-    public int maxAmmo = 30;
-    private int currentAmmo;
-
-    [Header("Firing")]
-    public GameObject bulletPrefab;
-    public Transform firePoint;
-    public float bulletSpeed = 50f;
-    public ParticleSystem muzzleFlash;
-
-    [Header("Effects")]
-    public AudioClip fireSound;
-    public AudioClip reloadSound;
-
-    private AudioSource audioSource;
-    private bool isReloading = false;
-
-    private void Start()
-    {
-        currentAmmo = maxAmmo;
-        audioSource = GetComponent<AudioSource>();
-    }
-
-    public void Fire(Transform shootPoint)
-    {
-        if (currentAmmo <= 0) return;
-        if (isReloading) return;
-
-        currentAmmo--;
-
-        if (bulletPrefab != null && shootPoint != null)
+        // Raycast from camera
+        Camera mainCamera = Camera.main;
+        if (mainCamera != null)
         {
-            GameObject bullet = Instantiate(bulletPrefab, shootPoint.position, shootPoint.rotation);
-            Rigidbody rb = bullet.GetComponent<Rigidbody>();
-            if (rb != null)
-                rb.velocity = shootPoint.forward * bulletSpeed;
+            Ray ray = mainCamera.ScreenPointToRay(new Vector3(Screen.width / 2, Screen.height / 2, 0));
+            RaycastHit hit;
+
+            if (Physics.Raycast(ray, out hit, weapons[currentWeaponIndex].range))
+            {
+                if (hit.collider.CompareTag("Player"))
+                {
+                    PhotonView targetPhoton = hit.collider.GetComponent<PhotonView>();
+                    if (targetPhoton != null && targetPhoton != photonView)
+                    {
+                        targetPhoton.RPC("TakeDamage", RpcTarget.All, 
+                            weapons[currentWeaponIndex].damage, photonView.Owner.NickName);
+                        
+                        // Add kill
+                        PlayerHealth playerHealth = GetComponent<PlayerHealth>();
+                        if (playerHealth != null)
+                        {
+                            playerHealth.AddKill();
+                        }
+                    }
+                }
+
+                Debug.Log($"[HIT] {weapons[currentWeaponIndex].name} hit {hit.collider.name} for {weapons[currentWeaponIndex].damage} damage");
+            }
+        }
+    }
+
+    void Reload()
+    {
+        if (currentWeaponIndex == -1) return;
+        
+        int ammoNeeded = weapons[currentWeaponIndex].maxAmmo - weapons[currentWeaponIndex].ammo;
+        weapons[currentWeaponIndex].ammo = weapons[currentWeaponIndex].maxAmmo;
+        
+        Debug.Log($"[RELOAD] {weapons[currentWeaponIndex].name} reloaded. Ammo: {weapons[currentWeaponIndex].ammo}/{weapons[currentWeaponIndex].maxAmmo}");
+    }
+
+    void SelectWeapon(int index)
+    {
+        if (index >= weapons.Length)
+        {
+            Debug.Log("Invalid weapon index!");
+            return;
         }
 
-        if (muzzleFlash != null)
-            muzzleFlash.Play();
-
-        PlayFireAnimation();
+        currentWeaponIndex = index;
+        Debug.Log($"[SELECT] Selected: {weapons[currentWeaponIndex].name}");
     }
 
-    public void PlayFireAnimation()
+    public Weapon GetCurrentWeapon()
     {
-        transform.localPosition -= new Vector3(0, 0, 0.05f);
-        Invoke("ResetRecoil", 0.05f);
+        if (currentWeaponIndex == -1) return null;
+        return weapons[currentWeaponIndex];
     }
 
-    private void ResetRecoil()
+    public int GetCurrentWeaponIndex()
     {
-        transform.localPosition = Vector3.zero;
+        return currentWeaponIndex;
     }
 
-    public void Reload()
+    public void AddAmmo(string weaponType, int amount)
     {
-        if (isReloading) return;
-        if (currentAmmo == maxAmmo) return;
-        StartCoroutine(ReloadCoroutine());
-    }
-
-    private System.Collections.IEnumerator ReloadCoroutine()
-    {
-        isReloading = true;
-        yield return new WaitForSeconds(reloadTime);
-        currentAmmo = maxAmmo;
-        isReloading = false;
-        Debug.Log($"[Gun] {weaponName} reloaded!");
-    }
-
-    public int GetAmmo()
-    {
-        return currentAmmo;
-    }
-
-    public void AddAmmo(int amount)
-    {
-        currentAmmo = Mathf.Min(currentAmmo + amount, maxAmmo);
-    }
-
-    public string GetWeaponName()
-    {
-        return weaponName;
-    }
-
-    public float GetDamage()
-    {
-        return damage;
+        foreach (var weapon in weapons)
+        {
+            if (weapon.type == weaponType)
+            {
+                weapon.ammo += amount;
+                if (weapon.ammo > weapon.maxAmmo)
+                    weapon.ammo = weapon.maxAmmo;
+                
+                Debug.Log($"[AMMO] Added {amount} ammo to {weapon.name}. Total: {weapon.ammo}");
+                break;
+            }
+        }
     }
 }
